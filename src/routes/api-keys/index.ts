@@ -44,7 +44,7 @@ const apiKeyRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // GET /api-keys — list user's API keys (no plaintext returned)
-  app.get('/', async (request, reply) => {
+  app.get('/', async (request) => {
     const keys = await listApiKeys(request.userId!);
     return {
       data: keys.map((k) => ({

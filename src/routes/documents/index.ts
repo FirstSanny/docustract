@@ -42,15 +42,16 @@ const paginationSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-const createDocumentSchema = z.object({
-  name: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(100),
-  sizeBytes: z.number().int().min(0),
-  metadata: z.record(z.unknown()).optional(),
-}).refine(
-  (data) => ALLOWED_MIME_TYPES.has(data.mimeType),
-  { message: `MIME type not allowed. Use one of: ${[...ALLOWED_MIME_TYPES].join(', ')}` }
-);
+const createDocumentSchema = z
+  .object({
+    name: z.string().min(1).max(255),
+    mimeType: z.string().min(1).max(100),
+    sizeBytes: z.number().int().min(0),
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .refine((data) => ALLOWED_MIME_TYPES.has(data.mimeType), {
+    message: `MIME type not allowed. Use one of: ${[...ALLOWED_MIME_TYPES].join(', ')}`,
+  });
 
 const updateDocumentSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -64,64 +65,68 @@ const documentParamsSchema = z.object({
 
 const documentsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Upload and create require admin (resource creation)
-  app.post('/upload', { preHandler: [requireAuth, requireRole('admin')] }, async (request: FastifyRequest, reply) => {
-    try {
-      const data = await request.file({
-        limits: { fileSize: MAX_FILE_SIZE },
-      });
+  app.post(
+    '/upload',
+    { preHandler: [requireAuth, requireRole('admin')] },
+    async (request: FastifyRequest, reply) => {
+      try {
+        const data = await request.file({
+          limits: { fileSize: MAX_FILE_SIZE },
+        });
 
-      if (!data) {
-        return reply.code(400).send({
-          statusCode: 400,
-          error: 'BadRequest',
-          message: 'No file provided',
+        if (!data) {
+          return reply.code(400).send({
+            statusCode: 400,
+            error: 'BadRequest',
+            message: 'No file provided',
+          });
+        }
+
+        if (!ALLOWED_MIME_TYPES.has(data.mimetype)) {
+          return reply.code(415).send({
+            statusCode: 415,
+            error: 'UnsupportedMediaType',
+            message: `File type '${data.mimetype}' is not allowed. Supported types: PDF, images, Word, Excel, PowerPoint, plain text, CSV, RTF, and ZIP.`,
+          });
+        }
+
+        const chunks: Buffer[] = [];
+        for await (const chunk of data.file) {
+          chunks.push(chunk);
+        }
+        const fileBuffer = Buffer.concat(chunks);
+
+        const uploadResult = await uploadFile({
+          fileData: fileBuffer,
+          fileName: data.filename,
+          mimeType: data.mimetype,
+        });
+
+        const doc = await createDocument({
+          userId: request.userId!,
+          name: data.filename,
+          mimeType: data.mimetype,
+          sizeBytes: fileBuffer.length,
+          metadata: {},
+        });
+
+        const updated = await updateDocument(doc.id, request.userId!, {
+          storageId: uploadResult.id,
+          storagePreviewUrl: uploadResult.previewUrl,
+          storageDownloadUrl: uploadResult.downloadUrl,
+        });
+
+        return reply.code(201).send(updated ?? doc);
+      } catch (err) {
+        request.log.error(err, 'File upload failed');
+        return reply.code(500).send({
+          statusCode: 500,
+          error: 'UploadError',
+          message: 'Failed to upload file',
         });
       }
-
-      if (!ALLOWED_MIME_TYPES.has(data.mimetype)) {
-        return reply.code(415).send({
-          statusCode: 415,
-          error: 'UnsupportedMediaType',
-          message: `File type '${data.mimetype}' is not allowed. Supported types: PDF, images, Word, Excel, PowerPoint, plain text, CSV, RTF, and ZIP.`,
-        });
-      }
-
-      const chunks: Buffer[] = [];
-      for await (const chunk of data.file) {
-        chunks.push(chunk);
-      }
-      const fileBuffer = Buffer.concat(chunks);
-
-      const uploadResult = await uploadFile({
-        fileData: fileBuffer,
-        fileName: data.filename,
-        mimeType: data.mimetype,
-      });
-
-      const doc = await createDocument({
-        userId: request.userId!,
-        name: data.filename,
-        mimeType: data.mimetype,
-        sizeBytes: fileBuffer.length,
-        metadata: {},
-      });
-
-      const updated = await updateDocument(doc.id, request.userId!, {
-        storageId: uploadResult.id,
-        storagePreviewUrl: uploadResult.previewUrl,
-        storageDownloadUrl: uploadResult.downloadUrl,
-      });
-
-      return reply.code(201).send(updated ?? doc);
-    } catch (err) {
-      request.log.error(err, 'File upload failed');
-      return reply.code(500).send({
-        statusCode: 500,
-        error: 'UploadError',
-        message: 'Failed to upload file',
-      });
-    }
-  });
+    },
+  );
 
   // POST /documents — admin only (resource creation)
   app.post('/', { preHandler: [requireAuth, requireRole('admin')] }, async (request, reply) => {
@@ -185,37 +190,41 @@ const documentsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // PATCH /documents/:id — admin or editor only (status changes, etc.)
-  app.patch('/:id', { preHandler: [requireAuth, requireRole('admin', 'editor')] }, async (request, reply) => {
-    const paramsParsed = documentParamsSchema.safeParse(request.params);
-    if (!paramsParsed.success) {
-      return reply.code(422).send({
-        statusCode: 422,
-        error: 'ValidationError',
-        message: paramsParsed.error.message,
-      });
-    }
+  app.patch(
+    '/:id',
+    { preHandler: [requireAuth, requireRole('admin', 'editor')] },
+    async (request, reply) => {
+      const paramsParsed = documentParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        return reply.code(422).send({
+          statusCode: 422,
+          error: 'ValidationError',
+          message: paramsParsed.error.message,
+        });
+      }
 
-    const bodyParsed = updateDocumentSchema.safeParse(request.body);
-    if (!bodyParsed.success) {
-      return reply.code(422).send({
-        statusCode: 422,
-        error: 'ValidationError',
-        message: bodyParsed.error.message,
-        details: bodyParsed.error.flatten(),
-      });
-    }
+      const bodyParsed = updateDocumentSchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        return reply.code(422).send({
+          statusCode: 422,
+          error: 'ValidationError',
+          message: bodyParsed.error.message,
+          details: bodyParsed.error.flatten(),
+        });
+      }
 
-    const doc = await updateDocument(paramsParsed.data.id, request.userId!, bodyParsed.data);
-    if (!doc) {
-      return reply.code(404).send({
-        statusCode: 404,
-        error: 'NotFound',
-        message: 'Document not found',
-      });
-    }
+      const doc = await updateDocument(paramsParsed.data.id, request.userId!, bodyParsed.data);
+      if (!doc) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'NotFound',
+          message: 'Document not found',
+        });
+      }
 
-    return doc;
-  });
+      return doc;
+    },
+  );
 
   // DELETE /documents/:id
   app.delete('/:id', async (request, reply) => {
@@ -252,7 +261,10 @@ const documentsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       try {
         await deleteFile(existing.storageId);
       } catch (err) {
-        request.log.warn({ err, fileId: existing.storageId }, 'Failed to delete file from Appwrite');
+        request.log.warn(
+          { err, fileId: existing.storageId },
+          'Failed to delete file from Appwrite',
+        );
       }
     }
 

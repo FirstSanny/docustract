@@ -32,9 +32,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.status(500).send({
       statusCode: 500,
       error: 'InternalServerError',
-      message: env.NODE_ENV === 'production'
-        ? 'An unexpected error occurred'
-        : error.message,
+      message: env.NODE_ENV === 'production' ? 'An unexpected error occurred' : error.message,
     });
   });
 

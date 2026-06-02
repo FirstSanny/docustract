@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
@@ -97,7 +98,7 @@ const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       const user = await createUser(email, password);
       const [accessToken, refreshToken] = await Promise.all([
         signAccessToken(user),
-        signRefreshToken(user.id, crypto.randomUUID()),
+        signRefreshToken(user.id, randomUUID()),
       ]);
 
       return reply.code(201).send({
@@ -175,7 +176,7 @@ const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       const [accessToken, refreshToken] = await Promise.all([
         signAccessToken(user),
-        signRefreshToken(user.id, crypto.randomUUID()),
+        signRefreshToken(user.id, randomUUID()),
       ]);
 
       return {
@@ -198,11 +199,14 @@ const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
 
     const oldToken = parsed.data.refreshToken;
-    const parsedJwt = await jwtVerify(oldToken, new TextEncoder().encode(process.env.JWT_SECRET ?? ''));
+    const parsedJwt = await jwtVerify(
+      oldToken,
+      new TextEncoder().encode(process.env.JWT_SECRET ?? ''),
+    );
     const jti = (parsedJwt.payload as { jti?: string }).jti;
 
     // Check revocation list
-    if (jti && await isRefreshTokenRevoked(jti)) {
+    if (jti && (await isRefreshTokenRevoked(jti))) {
       return reply.code(401).send({
         statusCode: 401,
         error: 'Unauthorized',
@@ -231,7 +235,7 @@ const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     // Rotate: revoke old token, issue new pair
     if (jti) await revokeRefreshToken(oldToken);
-    const newJti = crypto.randomUUID();
+    const newJti = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
       signAccessToken(user),
       signRefreshToken(user.id, newJti),
@@ -262,7 +266,7 @@ const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // GET /auth/me/role — returns the authenticated user's role (for client-side RBAC decisions)
-  app.get('/me/role', { preHandler: [requireAuth] }, async (request, reply) => {
+  app.get('/me/role', { preHandler: [requireAuth] }, async (request) => {
     return { role: request.userRole };
   });
 };

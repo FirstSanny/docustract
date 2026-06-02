@@ -37,12 +37,8 @@ export interface UploadOptions {
 }
 
 // Node.js-compatible File object for the Appwrite SDK
-function toAppwriteFile(
-  buffer: Buffer,
-  name: string,
-  mimeType: string,
-): File {
-  return new File([new Uint8Array(buffer)], name, { type: mimeType });
+function toAppwriteFile(buffer: Buffer, name: string, mimeType: string): globalThis.File {
+  return new globalThis.File([new Uint8Array(buffer)], name, { type: mimeType });
 }
 
 export async function uploadFile(options: UploadOptions): Promise<UploadResult> {

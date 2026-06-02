@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { db } from '../db/index.js';
 import type { ApiKeyTable } from '../db/index.js';
-import type { User } from '../types/index.js';
 
 export interface ApiKey {
   id: string;
@@ -85,7 +84,9 @@ export async function deleteApiKey(id: string, userId: string): Promise<boolean>
   return result.numDeletedRows > 0;
 }
 
-export async function verifyApiKey(plaintextKey: string): Promise<{ userId: string; keyId: string } | null> {
+export async function verifyApiKey(
+  plaintextKey: string,
+): Promise<{ userId: string; keyId: string } | null> {
   const prefix = plaintextKey.slice(0, KEY_PREFIX.length + 4);
   const rows = await db
     .selectFrom('api_keys')

@@ -1,6 +1,6 @@
 import { type FastifyInstance, type FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index.js';
-import { getClient, getStorage } from '../services/storage.js';
+import { getClient } from '../services/storage.js';
 import { env } from '../config/index.js';
 
 interface DependencyCheck {
@@ -35,14 +35,15 @@ async function checkAppwrite(): Promise<DependencyCheck> {
 
 export const healthRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/health', async (request, reply) => {
-    const [dbResult, appwriteResult] = await Promise.allSettled([
-      checkDb(),
-      checkAppwrite(),
-    ]);
+    const [dbResult, appwriteResult] = await Promise.allSettled([checkDb(), checkAppwrite()]);
 
     const checks: DependencyCheck[] = [
-      dbResult.status === 'fulfilled' ? dbResult.value : { name: 'database', status: 'error', error: 'Check failed' },
-      appwriteResult.status === 'fulfilled' ? appwriteResult.value : { name: 'appwrite', status: 'error', error: 'Check failed' },
+      dbResult.status === 'fulfilled'
+        ? dbResult.value
+        : { name: 'database', status: 'error', error: 'Check failed' },
+      appwriteResult.status === 'fulfilled'
+        ? appwriteResult.value
+        : { name: 'appwrite', status: 'error', error: 'Check failed' },
     ];
 
     const allOk = checks.every((c) => c.status === 'ok');

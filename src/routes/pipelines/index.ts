@@ -25,29 +25,33 @@ const pipelineParamsSchema = z.object({
 
 const pipelinesRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // POST /pipelines — requires admin or editor role
-  app.post('/', { preHandler: [requireAuth, requireRole('admin', 'editor')] }, async (request, reply) => {
-    const parsed = createPipelineSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(422).send({
-        statusCode: 422,
-        error: 'ValidationError',
-        message: parsed.error.message,
-        details: parsed.error.flatten(),
-      });
-    }
+  app.post(
+    '/',
+    { preHandler: [requireAuth, requireRole('admin', 'editor')] },
+    async (request, reply) => {
+      const parsed = createPipelineSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(422).send({
+          statusCode: 422,
+          error: 'ValidationError',
+          message: parsed.error.message,
+          details: parsed.error.flatten(),
+        });
+      }
 
-    const document = await getDocumentById(parsed.data.documentId, request.userId!);
-    if (!document) {
-      return reply.code(404).send({
-        statusCode: 404,
-        error: 'NotFound',
-        message: 'Document not found',
-      });
-    }
+      const document = await getDocumentById(parsed.data.documentId, request.userId!);
+      if (!document) {
+        return reply.code(404).send({
+          statusCode: 404,
+          error: 'NotFound',
+          message: 'Document not found',
+        });
+      }
 
-    const pipeline = await createPipeline({ ...parsed.data, userId: request.userId! });
-    return reply.code(201).send(pipeline);
-  });
+      const pipeline = await createPipeline({ ...parsed.data, userId: request.userId! });
+      return reply.code(201).send(pipeline);
+    },
+  );
 
   // GET /pipelines
   app.get('/', async (request, reply) => {
