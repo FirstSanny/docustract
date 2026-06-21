@@ -12,9 +12,11 @@ DocuStract is the API-first alternative to legacy document processing platforms.
 | JWT authentication | ✅ Complete |
 | Zod request validation | ✅ Complete |
 | CI/CD (ESLint, Vitest, GitHub Actions) | ✅ Complete |
-| API integration tests | ✅ 45 passing |
+| API integration tests | ✅ 109 passing |
 | Observability & monitoring | ✅ Complete |
-| README polish | ✅ Complete |
+| Documentation | ✅ Complete |
+| Security hardening | ✅ Complete |
+| Production readiness | ✅ Complete (pending Render deployment) |
 
 ## Tech Stack
 
@@ -24,9 +26,28 @@ See [docs/TECH-STACK.md](docs/TECH-STACK.md) for full rationale behind each choi
 
 ## Getting Started
 
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL database
+- Environment variables (see `.env.example`)
+
+### Installation
+
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd projects/DocuStract
+
 # Install dependencies
 npm install
+
+# Copy environment template
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run database migrations
+npm run migrate:up
 
 # Run the test suite
 npm test
@@ -36,6 +57,26 @@ npm run lint
 
 # Type-check
 npm run build
+```
+
+### Development
+
+```bash
+# Start development server with hot reload
+npm run dev
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Production
+
+```bash
+# Build the project
+npm run build
+
+# Start the server
+npm start
 ```
 
 ## Project Structure
@@ -95,6 +136,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
 | [ROADMAP.md](docs/ROADMAP.md) | Phase-by-phase delivery plan |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Branch strategy, PR process, code review |
 | [COMPETITIVE-LANDSCAPE.md](docs/COMPETITIVE-LANDSCAPE.md) | Market positioning and competitors |
+| [DEPENDENCY-AUDIT.md](docs/DEPENDENCY-AUDIT.md) | Security audit and dependency analysis |
+| [RELEASE-PROCESS.md](docs/RELEASE-PROCESS.md) | Release procedures and deployment checklist |
+| [BRAND-IDENTITY.md](docs/BRAND-IDENTITY.md) | Brand guidelines and visual identity |
+| [DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) | Design system and component library |
+| [PROJECT_COMPLETION_SUMMARY.md](PROJECT_COMPLETION_SUMMARY.md) | Complete project status and deployment guide |
 
 ## Contributing
 
