@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
-import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
+import { SignJWT, jwtVerify, errors as joseErrors, type JWTPayload } from 'jose';
 import { db } from '../db/index.js';
-import type { UserTable } from '../db/index.js';
+import type { NewRevokedToken, NewUser, UserRow } from '../db/index.js';
 import type { User } from '../types/index.js';
 
 const BCRYPT_ROUNDS = 12;
@@ -25,7 +25,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-function getJwtSecret(): Uint8Array {
+export function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('JWT_SECRET environment variable is required');
   return new TextEncoder().encode(secret);
@@ -51,13 +51,31 @@ export async function signRefreshToken(userId: string, jti?: string): Promise<st
     .sign(getJwtSecret());
 }
 
-export async function verifyToken(token: string): Promise<JwtPayload | null> {
+export type TokenVerificationResult =
+  | { valid: true; payload: JwtPayload }
+  | { valid: false; reason: 'expired' | 'invalid_signature' | 'malformed' | 'unknown' };
+
+export async function verifyTokenDetailed(token: string): Promise<TokenVerificationResult> {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
-    return payload as unknown as JwtPayload;
-  } catch {
-    return null;
+    return { valid: true, payload: payload as unknown as JwtPayload };
+  } catch (err) {
+    if (err instanceof joseErrors.JWTExpired) {
+      return { valid: false, reason: 'expired' };
+    }
+    if (err instanceof joseErrors.JWSSignatureVerificationFailed) {
+      return { valid: false, reason: 'invalid_signature' };
+    }
+    if (err instanceof joseErrors.JWTInvalid || err instanceof joseErrors.JWSInvalid) {
+      return { valid: false, reason: 'malformed' };
+    }
+    return { valid: false, reason: 'unknown' };
   }
+}
+
+export async function verifyToken(token: string): Promise<JwtPayload | null> {
+  const result = await verifyTokenDetailed(token);
+  return result.valid ? result.payload : null;
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
@@ -85,14 +103,15 @@ export async function createUser(
 ): Promise<User> {
   const passwordHash = await hashPassword(password);
 
+  const values: NewUser = {
+    email: email.toLowerCase(),
+    password_hash: passwordHash,
+    role,
+  };
+
   const row = await db
     .insertInto('users')
-    // @ts-ignore -- id/created_at/updated_at have DB defaults; Kysely requires them in type
-    .values({
-      email: email.toLowerCase(),
-      password_hash: passwordHash,
-      role,
-    })
+    .values(values)
     .returningAll()
     .executeTakeFirst();
 
@@ -110,15 +129,12 @@ export async function revokeRefreshToken(token: string): Promise<boolean> {
   const exp = parsed.payload.exp;
 
   if (jti && exp) {
-    // @ts-ignore -- id/revoked_at have DB defaults
-    await db
-      .insertInto('revoked_tokens')
-      .values({
-        user_id: payload.sub,
-        jti,
-        expires_at: new Date(exp * 1000),
-      })
-      .executeTakeFirst();
+    const values: NewRevokedToken = {
+      user_id: payload.sub,
+      jti,
+      expires_at: new Date(exp * 1000),
+    };
+    await db.insertInto('revoked_tokens').values(values).executeTakeFirst();
   }
 
   return true;
@@ -133,7 +149,7 @@ export async function isRefreshTokenRevoked(jti: string): Promise<boolean> {
   return !!row;
 }
 
-function dbUserToUser(row: UserTable): User {
+function dbUserToUser(row: UserRow): User {
   return {
     id: row.id,
     email: row.email,

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { db } from '../db/index.js';
-import type { ApiKeyTable } from '../db/index.js';
+import type { ApiKeyRow, NewApiKey } from '../db/index.js';
 
 export interface ApiKey {
   id: string;
@@ -38,16 +38,17 @@ export async function createApiKey(input: CreateApiKeyInput): Promise<CreatedApi
   const prefix = plaintextKey.slice(0, KEY_PREFIX.length + 4); // e.g. "dsk_live_abc1"
   const keyHash = hashKey(plaintextKey);
 
+  const values: NewApiKey = {
+    user_id: input.userId,
+    key_prefix: prefix,
+    key_hash: keyHash,
+    name: input.name,
+    expires_at: input.expiresAt ?? null,
+  };
+
   const row = await db
     .insertInto('api_keys')
-    // @ts-ignore -- id/created_at have DB defaults
-    .values({
-      user_id: input.userId,
-      key_prefix: prefix,
-      key_hash: keyHash,
-      name: input.name,
-      expires_at: input.expiresAt ?? null,
-    })
+    .values(values)
     .returningAll()
     .executeTakeFirst();
 
@@ -112,7 +113,7 @@ export async function verifyApiKey(
   return null;
 }
 
-function dbApiKeyToApiKey(row: ApiKeyTable): ApiKey {
+function dbApiKeyToApiKey(row: ApiKeyRow): ApiKey {
   return {
     id: row.id,
     userId: row.user_id,

@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import type { DocumentTable } from '../db/index.js';
+import type { DocumentRow, NewDocument } from '../db/index.js';
 import type { Document, PaginationParams, PaginatedResult } from '../types/index.js';
 
 export interface CreateDocumentInput {
@@ -20,16 +20,17 @@ export interface UpdateDocumentInput {
 }
 
 export async function createDocument(input: CreateDocumentInput): Promise<Document> {
+  const values: NewDocument = {
+    user_id: input.userId,
+    name: input.name,
+    mime_type: input.mimeType,
+    size_bytes: input.sizeBytes,
+    metadata: input.metadata ?? {},
+  };
+
   const row = await db
     .insertInto('documents')
-    // @ts-ignore -- id/created_at/updated_at have DB defaults
-    .values({
-      user_id: input.userId,
-      name: input.name,
-      mime_type: input.mimeType,
-      size_bytes: input.sizeBytes,
-      metadata: input.metadata ?? {},
-    })
+    .values(values)
     .returningAll()
     .executeTakeFirst();
 
@@ -114,7 +115,7 @@ export async function deleteDocument(id: string, userId: string): Promise<boolea
   return result.numDeletedRows > 0;
 }
 
-function dbDocumentToDocument(row: DocumentTable): Document {
+function dbDocumentToDocument(row: DocumentRow): Document {
   return {
     id: row.id,
     userId: row.user_id,

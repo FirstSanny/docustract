@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import type { PipelineTable } from '../db/index.js';
+import type { NewPipeline, PipelineRow } from '../db/index.js';
 import type { Pipeline, PaginationParams, PaginatedResult } from '../types/index.js';
 
 export interface CreatePipelineInput {
@@ -9,14 +9,15 @@ export interface CreatePipelineInput {
 }
 
 export async function createPipeline(input: CreatePipelineInput): Promise<Pipeline> {
+  const values: NewPipeline = {
+    user_id: input.userId,
+    document_id: input.documentId,
+    type: input.type,
+  };
+
   const row = await db
     .insertInto('pipelines')
-    // @ts-ignore -- id/created_at/updated_at have DB defaults
-    .values({
-      user_id: input.userId,
-      document_id: input.documentId,
-      type: input.type,
-    })
+    .values(values)
     .returningAll()
     .executeTakeFirst();
 
@@ -76,7 +77,7 @@ export async function deletePipeline(id: string, userId: string): Promise<boolea
   return result.numDeletedRows > 0;
 }
 
-function dbPipelineToPipeline(row: PipelineTable): Pipeline {
+function dbPipelineToPipeline(row: PipelineRow): Pipeline {
   return {
     id: row.id,
     userId: row.user_id,
